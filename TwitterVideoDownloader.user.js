@@ -1,46 +1,87 @@
 // ==UserScript==
 // @name         Twitter Video Downloader
-// @version      1.1
+// @version      1.2
 // @description  Adds option to download twitter videos in the right click menu
 // @author       DaRealSh0T
 // @namespace    https://github.com/DaRealSh0T/Twitter-Video-Downloader
+// @updateURL    https://github.com/DaRealSh0T/Twitter-Video-Downloader/raw/main/TwitterVideoDownloader.user.js
 // @match        https://twitter.com/*
-// @grant        none
+// @match        https://x.com/*
+// @grant        unsafeWindow
+// @sandbox      JavaScript
 // ==/UserScript==
 
-function addDownload(poster, downloadURL) {
-	const videos = document.getElementsByTagName('video');
-	for (const video of videos) {
-		if (video.poster == poster && !video.dataset.addedDownload) {
-			video.dataset.addedDownload = true;
-			const observer = new MutationObserver(mutationList => {
-				for (const mutation of mutationList) {
-					if (mutation.type == 'childList') {
-						if (mutation.addedNodes.length) {
-							const addedNode = mutation.addedNodes[0];
-							if (
-								addedNode.childElementCount == 1 &&
-								addedNode.firstChild.role == 'menuitem'
-							) {
+const toWatch = [];
+
+async function downloadVideo(videoUrl) {
+	let req = await fetch(videoUrl);
+	let blob = await req.blob();
+
+	const link = document.createElement('a');
+	link.href = URL.createObjectURL(blob);
+	link.setAttribute('download', videoUrl.split('/').at(-1).split('?')[0]);
+	document.body.appendChild(link);
+	link.click();
+	document.body.removeChild(link);
+}
+
+const buttons = [
+	['Open in New Tab', downloadURL => window.open(downloadURL, '_blank')],
+	['Download', downloadURL => downloadVideo(downloadURL)],
+];
+
+let observer = new MutationObserver(mutationList => {
+	for (const mutation of mutationList) {
+		if (mutation.type == 'childList') {
+			if (mutation.addedNodes.length) {
+				for (const addedNode of mutation.addedNodes) {
+					if (
+						addedNode.childElementCount != 1 ||
+						addedNode.firstChild.role != 'menuitem'
+					)
+						continue;
+					let videoElm =
+						addedNode.parentElement?.parentElement?.parentElement?.getElementsByTagName?.(
+							'video'
+						)?.[0];
+					if (videoElm && videoElm.poster) {
+						let added = false;
+						for (const [poster, downloadURL] of toWatch) {
+							if (videoElm.poster == poster) {
+								added = true;
+								for (const [text, func] of buttons) {
+									const newMenuItem =
+										addedNode.firstChild.cloneNode(true);
+									newMenuItem.firstChild.firstChild.firstChild.innerText =
+										text;
+									newMenuItem.onclick = () =>
+										func(downloadURL);
+									addedNode.appendChild(newMenuItem);
+								}
+							}
+						}
+						if (!added && videoElm.src?.endsWith?.('.mp4')) {
+							for (const [text, func] of buttons) {
 								const newMenuItem =
 									addedNode.firstChild.cloneNode(true);
 								newMenuItem.firstChild.firstChild.firstChild.innerText =
-									'Download';
-								newMenuItem.onclick = () =>
-									window.open(downloadURL, '_blank');
+									text;
+								newMenuItem.onclick = () => func(downloadURL);
 								addedNode.appendChild(newMenuItem);
 							}
 						}
 					}
 				}
-			});
-			observer.observe(
-				video.parentElement.parentElement.parentElement.lastChild,
-				{ attributes: false, childList: true, subtree: true }
-			);
+			}
 		}
 	}
-}
+});
+
+observer.observe(document.body, {
+	attributes: false,
+	childList: true,
+	subtree: true,
+});
 
 function parseTweetLegacy(legacy) {
 	for (const mediaEntity of legacy?.extended_entities?.media ?? []) {
@@ -48,9 +89,7 @@ function parseTweetLegacy(legacy) {
 			const highestBitrate = mediaEntity.video_info.variants.sort(
 				(a, b) => (b.bitrate || 0) - (a.bitrate || 0)
 			)[0];
-			setInterval(() => {
-				addDownload(mediaEntity.media_url_https, highestBitrate.url);
-			}, 50);
+			toWatch.push([mediaEntity.media_url_https, highestBitrate.url]);
 		}
 	}
 }
@@ -134,3 +173,11 @@ XMLHttpRequest.prototype.getAllResponseHeaders = function () {
 	} catch (e) {}
 	return pGetAllResponseHeaders.apply(this, arguments);
 };
+
+unsafeWindow.XMLHttpRequest.prototype.getAllResponseHeaders = cloneInto(
+	XMLHttpRequest.prototype.getAllResponseHeaders,
+	unsafeWindow,
+	{
+		cloneFunctions: true,
+	}
+);
