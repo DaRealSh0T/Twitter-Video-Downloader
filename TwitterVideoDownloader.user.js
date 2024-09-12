@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Twitter Video Downloader
-// @version      1.2
+// @version      1.3
 // @description  Adds option to download twitter videos in the right click menu
 // @author       DaRealSh0T
 // @namespace    https://github.com/DaRealSh0T/Twitter-Video-Downloader
@@ -11,7 +11,7 @@
 // @sandbox      JavaScript
 // ==/UserScript==
 
-const toWatch = [];
+const toWatch = new Map();
 
 async function downloadVideo(videoUrl) {
 	let req = await fetch(videoUrl);
@@ -45,22 +45,13 @@ let observer = new MutationObserver(mutationList => {
 							'video'
 						)?.[0];
 					if (videoElm && videoElm.poster) {
-						let added = false;
-						for (const [poster, downloadURL] of toWatch) {
-							if (videoElm.poster == poster) {
-								added = true;
-								for (const [text, func] of buttons) {
-									const newMenuItem =
-										addedNode.firstChild.cloneNode(true);
-									newMenuItem.firstChild.firstChild.firstChild.innerText =
-										text;
-									newMenuItem.onclick = () =>
-										func(downloadURL);
-									addedNode.appendChild(newMenuItem);
-								}
-							}
+						let downloadURL;
+						if (toWatch.has(videoElm.poster)) {
+							downloadURL = toWatch.get(videoElm.poster);
+						} else if (videoElm.src?.endsWith?.('.mp4')) {
+							downloadURL = videoElm.src;
 						}
-						if (!added && videoElm.src?.endsWith?.('.mp4')) {
+						if (downloadURL) {
 							for (const [text, func] of buttons) {
 								const newMenuItem =
 									addedNode.firstChild.cloneNode(true);
@@ -89,7 +80,7 @@ function parseTweetLegacy(legacy) {
 			const highestBitrate = mediaEntity.video_info.variants.sort(
 				(a, b) => (b.bitrate || 0) - (a.bitrate || 0)
 			)[0];
-			toWatch.push([mediaEntity.media_url_https, highestBitrate.url]);
+			toWatch.set(mediaEntity.media_url_https, highestBitrate.url);
 		}
 	}
 }
