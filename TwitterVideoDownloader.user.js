@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Twitter Video Downloader
-// @version      1.3
+// @version      1.4
 // @description  Adds option to download twitter videos in the right click menu
 // @author       DaRealSh0T
 // @namespace    https://github.com/DaRealSh0T/Twitter-Video-Downloader
@@ -156,6 +156,11 @@ XMLHttpRequest.prototype.getAllResponseHeaders = function () {
 				}
 			} else if (pathname.endsWith('HomeTimeline')) {
 				res = res?.data?.home?.home_timeline_urt;
+				if (res?.instructions) {
+					parseInstructions(res.instructions);
+				}
+			} else if (pathname.endsWith('Likes')) {
+				res = res?.data?.user?.result?.timeline?.timeline;
 				if (res?.instructions) {
 					parseInstructions(res.instructions);
 				}
